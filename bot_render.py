@@ -3,6 +3,7 @@ import logging
 import os
 import re
 from datetime import date, datetime, timedelta, time
+from zoneinfo import ZoneInfo
 from typing import Optional
 
 import openpyxl
@@ -55,9 +56,14 @@ TIME_COL = 4
 # Часовой пояс школы.Q
 # Барнаул / Алтайский край = UTC+7.
 TIMEZONE = "Asia/Barnaul"
+LOCAL_TZ = ZoneInfo(TIMEZONE)
 
 # Во сколько автоматически присылать расписание.
-AUTO_SEND_TIME = time(hour=7, minute=0)
+AUTO_SEND_TIME = time(hour=7, minute=0, tzinfo=LOCAL_TZ)
+
+def today_local() -> date:
+    """Текущая дата по часовому поясу школы (Барнаул)."""
+    return datetime.now(LOCAL_TZ).date()
 
 
 # ============================================================
@@ -411,7 +417,7 @@ async def send_today(
     context: ContextTypes.DEFAULT_TYPE,
 ):
     try:
-        target_date = date.today()
+        target_date = today_local()
         lessons = get_schedule(target_date)
         text = format_day(target_date, lessons)
 
@@ -440,7 +446,7 @@ async def send_tomorrow(
     try:
 
         target_date = (
-            date.today()
+            today_local()
             + timedelta(days=1)
         )
 
@@ -482,7 +488,7 @@ async def send_week(
 
     try:
 
-        today_date = date.today()
+        today_date = today_local()
 
         monday = (
             today_date
@@ -562,7 +568,7 @@ async def automatic_schedule(
 
     try:
 
-        target_date = date.today()
+        target_date = today_local()
 
         lessons = get_schedule(
             target_date
@@ -741,6 +747,12 @@ app = FastAPI()
 @app.get("/", response_class=PlainTextResponse)
 async def health():
     return "Schedule bot is running"
+
+
+@app.get("/health", response_class=PlainTextResponse)
+async def health_check():
+    """Endpoint for an external uptime monitor."""
+    return "OK"
 
 
 @app.post("/telegram/webhook")
