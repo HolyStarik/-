@@ -749,7 +749,11 @@ async def health():
     return "Schedule bot is running"
 
 
-@app.get("/health", response_class=PlainTextResponse)
+@app.api_route(
+    "/health",
+    methods=["GET", "HEAD"],
+    response_class=PlainTextResponse,
+)
 async def health_check():
     """Endpoint for an external uptime monitor."""
     return "OK"
