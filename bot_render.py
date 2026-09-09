@@ -78,6 +78,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+
+
+# ============================================================
+# ОТСЛЕЖИВАНИЕ СООБЩЕНИЙ БОТА
+# ============================================================
+
+tracked_messages = {}
+
+
+async def reply_tracked(update: Update, text: str, **kwargs):
+    """Отправляет ответ и запоминает его, чтобы /clear мог удалить сообщения бота."""
+    message = await update.message.reply_text(text, **kwargs)
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    if chat_id is not None:
+        tracked_messages.setdefault(chat_id, set()).add(message.message_id)
+    return message
+
+
+def track_message(chat_id: int, message_id: int):
+    tracked_messages.setdefault(chat_id, set()).add(message_id)
+
+
 # ============================================================
 # КНОПКИ
 # ============================================================
@@ -422,7 +444,7 @@ async def send_today(
         text = format_day(target_date, lessons)
 
         assert update.message is not None
-        await update.message.reply_text(
+        await reply_tracked(update, 
             text,
             parse_mode="HTML",
             reply_markup=MAIN_KEYBOARD,
@@ -432,7 +454,7 @@ async def send_today(
         logger.exception("Ошибка получения расписания на сегодня")
 
         assert update.message is not None
-        await update.message.reply_text(
+        await reply_tracked(update, 
             "❌ Не удалось получить расписание.",
             reply_markup=MAIN_KEYBOARD,
         )
@@ -458,7 +480,7 @@ async def send_tomorrow(
         )
 
         assert update.message is not None
-        await update.message.reply_text(
+        await reply_tracked(update, 
             text,
             parse_mode="HTML",
             reply_markup=MAIN_KEYBOARD,
@@ -471,7 +493,7 @@ async def send_tomorrow(
         )
 
         assert update.message is not None
-        await update.message.reply_text(
+        await reply_tracked(update, 
             "❌ Не удалось получить расписание.",
             reply_markup=MAIN_KEYBOARD,
         )
@@ -532,7 +554,7 @@ async def send_week(
         ):
 
             assert update.message is not None
-            await update.message.reply_text(
+            await reply_tracked(update, 
                 full_text[
                     start:start + 3900
                 ],
@@ -547,7 +569,7 @@ async def send_week(
         )
 
         assert update.message is not None
-        await update.message.reply_text(
+        await reply_tracked(update, 
             "❌ Не удалось получить расписание.",
             reply_markup=MAIN_KEYBOARD,
         )
@@ -579,7 +601,7 @@ async def automatic_schedule(
             lessons,
         )
 
-        await context.bot.send_message(
+        sent = await context.bot.send_message(
             chat_id=chat_id, # type: ignore
             text=(
                 "🌅 <b>Доброе утро!</b>\n\n"
@@ -588,6 +610,7 @@ async def automatic_schedule(
             parse_mode="HTML",
             reply_markup=MAIN_KEYBOARD,
         )
+        track_message(chat_id, sent.message_id)
 
     except Exception:
 
@@ -600,22 +623,54 @@ async def enable_auto(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    assert update.message is not None
-    await update.message.reply_text(
+    chat = update.effective_chat
+    if chat is None:
+        return
+
+    if context.job_queue is None:
+        await reply_tracked(
+            update,
+            "❌ Локальное авто-расписание недоступно. Проверь зависимость python-telegram-bot[job-queue].",
+            reply_markup=MAIN_KEYBOARD,
+        )
+        return
+
+    # Удаляем старую задачу этого чата, если она была.
+    for job in context.job_queue.get_jobs_by_name(f"schedule_{chat.id}"):
+        job.schedule_removal()
+
+    context.job_queue.run_daily(
+        automatic_schedule,
+        time=AUTO_SEND_TIME,
+        chat_id=chat.id,
+        name=f"schedule_{chat.id}",
+    )
+
+    await reply_tracked(
+        update,
         "✅ <b>Авто-расписание включено.</b>\n\n"
-        "Каждый день в <b>07:00 по времени Барнаула</b> расписание будет отправляться автоматически.\n\n"
-        "На сервере это выполняется отдельным бесплатным планировщиком.",
+        "Каждый день в <b>07:00 по времени Барнаула</b> я буду присылать расписание в этот чат.",
         parse_mode="HTML",
         reply_markup=MAIN_KEYBOARD,
     )
+
 
 async def disable_auto(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    assert update.message is not None
-    await update.message.reply_text(
-        "🛑 Чтобы отключить ежедневную отправку, убери AUTO_CHAT_ID из настроек сервера/планировщика.",
+    chat = update.effective_chat
+    if chat is None:
+        return
+
+    if context.job_queue is not None:
+        for job in context.job_queue.get_jobs_by_name(f"schedule_{chat.id}"):
+            job.schedule_removal()
+
+    await reply_tracked(
+        update,
+        "🛑 <b>Авто-расписание выключено.</b>",
+        parse_mode="HTML",
         reply_markup=MAIN_KEYBOARD,
     )
 
@@ -629,7 +684,7 @@ async def start(
 ):
 
     assert update.message is not None
-    await update.message.reply_text(
+    await reply_tracked(update, 
         "👋 <b>Привет!</b>\n\n"
         "Я бот расписания группы <b>451</b>.\n\n"
         "Выбери нужный пункт ниже 👇",
@@ -648,7 +703,7 @@ async def refresh(
 ):
 
     assert update.message is not None
-    await update.message.reply_text(
+    await reply_tracked(update, 
         "🔄 Загружаю самое свежее расписание..."
     )
 
@@ -724,6 +779,58 @@ async def myid(
     )
 
 
+
+
+# ============================================================
+# ПОМОЩЬ
+# ============================================================
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await reply_tracked(
+        update,
+        "📚 <b>Команды бота</b>\n\n"
+        "/start — запустить бота\n"
+        "/today — расписание на сегодня\n"
+        "/tomorrow — расписание на завтра\n"
+        "/week — расписание на неделю\n"
+        "/auto — включить авто-расписание в этом чате\n"
+        "/stop — выключить авто-расписание в этом чате\n"
+        "/myid — показать chat_id\n"
+        "/clear — удалить сообщения бота, которые он запомнил в этом чате\n"
+        "/help — показать эту справку",
+        parse_mode="HTML",
+        reply_markup=MAIN_KEYBOARD,
+    )
+
+
+# ============================================================
+# ОЧИСТКА
+# ============================================================
+
+async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    message = update.effective_message
+    if chat is None or message is None:
+        return
+
+    # Удаляем саму команду пользователя. Для групп это работает, если у бота
+    # есть право удалять сообщения.
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    message_ids = tracked_messages.pop(chat.id, set())
+    for message_id in list(message_ids):
+        try:
+            await context.bot.delete_message(
+                chat_id=chat.id,
+                message_id=message_id,
+            )
+        except Exception:
+            pass
+
+
 # ============================================================
 # MAIN
 # ============================================================
@@ -732,6 +839,8 @@ application = Application.builder().token(TOKEN or "").build()
 
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("myid", myid))
+application.add_handler(CommandHandler("help", help_command))
+application.add_handler(CommandHandler("clear", clear_command))
 application.add_handler(CommandHandler("today", send_today))
 application.add_handler(CommandHandler("tomorrow", send_tomorrow))
 application.add_handler(CommandHandler("week", send_week))
@@ -749,11 +858,7 @@ async def health():
     return "Schedule bot is running"
 
 
-@app.api_route(
-    "/health",
-    methods=["GET", "HEAD"],
-    response_class=PlainTextResponse,
-)
+@app.get("/health", response_class=PlainTextResponse)
 async def health_check():
     """Endpoint for an external uptime monitor."""
     return "OK"
