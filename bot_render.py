@@ -866,6 +866,7 @@ async def health():
 async def health_check():
     """Endpoint for an external uptime monitor."""
     return "OK"
+
 @app.post("/alice")
 async def alice_webhook(request: Request):
     """Webhook для навыка Алисы."""
