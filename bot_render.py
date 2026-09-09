@@ -866,6 +866,71 @@ async def health():
 async def health_check():
     """Endpoint for an external uptime monitor."""
     return "OK"
+    @app.post("/alice")
+async def alice_webhook(request: Request):
+    """Webhook для навыка Алисы."""
+    try:
+        data = await request.json()
+
+        command = (
+            data.get("request", {})
+            .get("command", "")
+            .strip()
+            .lower()
+        )
+
+        # Если навык только что запустили
+        if not command:
+            text = (
+                "Привет! Я знаю расписание группы 451. "
+                "Спроси: «какое расписание сегодня?» "
+                "или «что завтра по расписанию?»"
+            )
+
+        else:
+            # Сегодня / завтра
+            target_date = today_local()
+
+            if "завтра" in command:
+                target_date += timedelta(days=1)
+
+            lessons = get_schedule(target_date)
+
+            # Используем существующее форматирование бота
+            text = format_day(target_date, lessons)
+
+            # Убираем HTML-теги Telegram,
+            # чтобы Алиса нормально озвучивала текст
+            text = re.sub(r"<[^>]+>", "", text)
+
+            # Немного адаптируем начало ответа для Алисы
+            text = (
+                f"Расписание группы 451 на "
+                f"{target_date.strftime('%d.%m.%Y')}. "
+                + text.split("\n", 3)[-1]
+            )
+
+        return {
+            "response": {
+                "text": text,
+                "end_session": False,
+            },
+            "version": "1.0",
+        }
+
+    except Exception:
+        logger.exception("Ошибка навыка Алисы")
+
+        return {
+            "response": {
+                "text": "Не удалось получить расписание. Попробуй ещё раз.",
+                "end_session": False,
+            },
+            "version": "1.0",
+        }
+
+
+    
 
 
 @app.post("/telegram/webhook")
