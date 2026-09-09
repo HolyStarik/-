@@ -879,36 +879,23 @@ async def alice_webhook(request: Request):
             .lower()
         )
 
-        # Если навык только что запустили
         if not command:
             text = (
                 "Привет! Я знаю расписание группы 451. "
-                "Спроси: «какое расписание сегодня?» "
-                "или «что завтра по расписанию?»"
+                "Спроси: какое расписание сегодня? "
+                "Или: что завтра по расписанию?"
             )
-
         else:
-            # Сегодня / завтра
             target_date = today_local()
 
             if "завтра" in command:
                 target_date += timedelta(days=1)
 
             lessons = get_schedule(target_date)
-
-            # Используем существующее форматирование бота
             text = format_day(target_date, lessons)
 
-            # Убираем HTML-теги Telegram,
-            # чтобы Алиса нормально озвучивала текст
+            # Убираем Telegram HTML
             text = re.sub(r"<[^>]+>", "", text)
-
-            # Немного адаптируем начало ответа для Алисы
-            text = (
-                f"Расписание группы 451 на "
-                f"{target_date.strftime('%d.%m.%Y')}. "
-                + text.split("\n", 3)[-1]
-            )
 
         return {
             "response": {
@@ -928,7 +915,6 @@ async def alice_webhook(request: Request):
             },
             "version": "1.0",
         }
-
 
     
 
