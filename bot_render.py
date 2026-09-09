@@ -701,6 +701,24 @@ async def button_handler(
 
 
 # ============================================================
+# ПОЛУЧИТЬ CHAT ID
+# ============================================================
+
+async def myid(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    chat = update.effective_chat
+    if chat is None:
+        return
+
+    await update.effective_message.reply_text(
+        f"Ваш chat_id: <code>{chat.id}</code>",
+        parse_mode="HTML",
+    )
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
