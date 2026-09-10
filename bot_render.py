@@ -870,6 +870,7 @@ async def health_check():
 @app.post("/alice")
 async def alice_webhook(request: Request):
     """Webhook для навыка Алисы."""
+
     try:
         data = await request.json()
 
@@ -880,57 +881,52 @@ async def alice_webhook(request: Request):
             .lower()
         )
 
-        if not command:
+        # По умолчанию показываем сегодня
+        target_date = today_local()
+
+        # Если пользователь сказал "завтра"
+        if "завтра" in command:
+            target_date += timedelta(days=1)
+
+        lessons = get_schedule(target_date)
+
+        if not lessons:
             text = (
-                "Привет! Я знаю расписание группы 451. "
-                "Спроси, какое расписание сегодня, "
-                "или что завтра по расписанию."
+                f"На {target_date.strftime('%d.%m')} "
+                "пар нет."
             )
         else:
-            target_date = today_local()
+            parts = []
 
-            if "завтра" in command:
-                target_date += timedelta(days=1)
+            for lesson in lessons:
+                pair = lesson["pair"]
+                lesson_time = lesson["time"]
+                subject = lesson["subject"]
 
-            lessons = get_schedule(target_date)
+                if pair is not None:
+                    prefix = f"{pair} пара"
+                else:
+                    prefix = "Дополнительно"
 
-            if not lessons:
-                text = (
-                    f"На {target_date.strftime('%d.%m')} "
-                    "пар нет."
-                )
-            else:
-                parts = []
+                if lesson_time:
+                    parts.append(
+                        f"{prefix}, {lesson_time} — {subject}"
+                    )
+                else:
+                    parts.append(
+                        f"{prefix} — {subject}"
+                    )
 
-                for lesson in lessons:
-                    pair = lesson["pair"]
-                    lesson_time = lesson["time"]
-                    subject = lesson["subject"]
-
-                    if pair is not None:
-                        prefix = f"{pair} пара"
-                    else:
-                        prefix = "Дополнительно"
-
-                    if lesson_time:
-                        parts.append(
-                            f"{prefix}, {lesson_time} — {subject}"
-                        )
-                    else:
-                        parts.append(
-                            f"{prefix} — {subject}"
-                        )
-
-                text = (
-                    f"Расписание на {target_date.strftime('%d.%m')}. "
-                    + ". ".join(parts)
-                    + "."
-                )
+            text = (
+                f"Расписание на {target_date.strftime('%d.%m')}. "
+                + ". ".join(parts)
+                + "."
+            )
 
         return {
             "response": {
                 "text": text,
-                "end_session": False,
+                "end_session": True,
             },
             "version": "1.0",
         }
@@ -940,8 +936,11 @@ async def alice_webhook(request: Request):
 
         return {
             "response": {
-                "text": "Не удалось получить расписание. Попробуй ещё раз.",
-                "end_session": False,
+                "text": (
+                    "Не удалось получить расписание. "
+                    "Попробуй ещё раз."
+                ),
+                "end_session": True,
             },
             "version": "1.0",
         }
