@@ -883,8 +883,8 @@ async def alice_webhook(request: Request):
         if not command:
             text = (
                 "Привет! Я знаю расписание группы 451. "
-                "Спроси: какое расписание сегодня? "
-                "Или: что завтра по расписанию?"
+                "Спроси, какое расписание сегодня, "
+                "или что завтра по расписанию."
             )
         else:
             target_date = today_local()
@@ -893,10 +893,39 @@ async def alice_webhook(request: Request):
                 target_date += timedelta(days=1)
 
             lessons = get_schedule(target_date)
-            text = format_day(target_date, lessons)
 
-            # Убираем Telegram HTML
-            text = re.sub(r"<[^>]+>", "", text)
+            if not lessons:
+                text = (
+                    f"На {target_date.strftime('%d.%m')} "
+                    "пар нет."
+                )
+            else:
+                parts = []
+
+                for lesson in lessons:
+                    pair = lesson["pair"]
+                    lesson_time = lesson["time"]
+                    subject = lesson["subject"]
+
+                    if pair is not None:
+                        prefix = f"{pair} пара"
+                    else:
+                        prefix = "Дополнительно"
+
+                    if lesson_time:
+                        parts.append(
+                            f"{prefix}, {lesson_time} — {subject}"
+                        )
+                    else:
+                        parts.append(
+                            f"{prefix} — {subject}"
+                        )
+
+                text = (
+                    f"Расписание на {target_date.strftime('%d.%m')}. "
+                    + ". ".join(parts)
+                    + "."
+                )
 
         return {
             "response": {
@@ -916,7 +945,6 @@ async def alice_webhook(request: Request):
             },
             "version": "1.0",
         }
-
     
 
 
