@@ -1,6 +1,7 @@
 import io
 import os
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 import requests
 import openpyxl
 
@@ -98,7 +99,7 @@ def format_day(target_date, lessons):
 
 
 def main():
-    today = date.today()
+    today = datetime.now(ZoneInfo("Asia/Barnaul")).date()
     text = "🌅 <b>Доброе утро!</b>\n\n" + format_day(today, get_schedule(today))
     response = requests.post(
         f"https://api.telegram.org/bot{TOKEN}/sendMessage",
